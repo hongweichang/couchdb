@@ -249,10 +249,26 @@ find_split_target_seq(TgtDb, SrcNode0, SrcUUIDPrefix, SrcSeq) ->
         false -> SrcNode0
     end,
     case find_split_target_seq_int(TgtDb, SrcNode, SrcUUIDPrefix) of
-        {ok, Seq} when is_integer(Seq), Seq < SrcSeq ->
-            Seq;
-        {ok, Seq} when is_integer(Seq), Seq >= SrcSeq ->
+        {ok, [{BulkCopySeq, BulkCopySeq} | _]} when SrcSeq =< BulkCopySeq ->
+            % Check if source sequence is at or below the initial bulk copy
+            % checkpointed sequence. That sequence or anything lower than it
+            % can be directly replaced with the same value for each target. For
+            % extra safety we assert that the initial source and target
+            % sequences are the same value
             SrcSeq;
+        {ok, Seqs= [{_, _} | _]} ->
+            % Pick the target sequence for the greatest source sequence that is
+            % less than `SrcSeq`.
+            case lists:takewhile(fun({Seq, _}) -> Seq < SrcSeq end, Seqs) of
+                [] ->
+                    couch_log:warning("~p find_split_target_seq target seq not found "
+                       "tgt_db: ~p, src_uuid_prefix: ~p, src_seq: ~p",
+                        [?MODULE, couch_db:name(TgtDb), SrcUUIDPrefix, SrcSeq]),
+                    0;
+                [{_, _} | _] = Seqs1 ->
+                    {_, TSeq} = lists:last(Seqs1),
+                    TSeq
+            end;
         {not_found, _} ->
             couch_log:warning("~p find_split_target_seq target seq not found "
                 "tgt_db: ~p, src_uuid_prefix: ~p, src_seq: ~p",
@@ -618,12 +634,15 @@ find_split_target_seq_int(TgtDb, Node, SrcUUIDPrefix) ->
         case TgtUUID == DocTgtUUID of
             true ->
                 {History} = couch_util:get_value(<<"history">>, Props, {[]}),
-                SrcHistory = couch_util:get_value(Node, History, []),
-                case get_target_seq(SrcHistory, TgtUUID, Node, SrcUUIDPrefix) of
-                    not_found ->
+                HProps = couch_util:get_value(Node, History, []),
+                case get_target_seqs(HProps, TgtUUID, Node, SrcUUIDPrefix, []) of
+                    [] ->
+                        % No replication found from source to target
                         {ok, not_found};
-                    Seq when is_integer(Seq) ->
-                        {stop, Seq}
+                    [{_, _} | _] = SeqPairs ->
+                        % Found shared replicated history from source to target
+                        % Return sorted list by the earliest source sequence
+                        {stop, lists:sort(SeqPairs)}
                 end;
             false ->
                 {ok, not_found}
@@ -631,8 +650,8 @@ find_split_target_seq_int(TgtDb, Node, SrcUUIDPrefix) ->
     end,
     Options = [{start_key, <<"_local/shard-sync-">>}],
     case couch_db:fold_local_docs(TgtDb, FoldFun, not_found, Options) of
-        {ok, Seq} when is_integer(Seq) ->
-            {ok, Seq};
+        {ok, Seqs} when is_list(Seqs) ->
+            {ok, Seqs};
         {ok, not_found} ->
             {not_found, missing};
         Else ->
@@ -641,19 +660,26 @@ find_split_target_seq_int(TgtDb, Node, SrcUUIDPrefix) ->
     end.
 
 
-get_target_seq([], _TgtUUID, _Node, _SrcUUIDPrefix) ->
-    not_found;
+% Get target sequences for each checkpoint when source replicated to the target
+% The "target" is the current db where the history entry was read from and "source"
+% is another, now possibly deleted, database.
+get_target_seqs([], _TgtUUID, _Node, _SrcUUIDPrefix, Acc) ->
+    lists:reverse(Acc);
 
-get_target_seq([{Entry} | SrcHistory], TgtUUID, Node, SrcUUIDPrefix) ->
+get_target_seqs([{Entry} | HProps], TgtUUID, Node, SrcUUIDPrefix, Acc) ->
     SameTgt = couch_util:get_value(<<"target_uuid">>, Entry) =:= TgtUUID,
     SameNode = couch_util:get_value(<<"target_node">>, Entry) =:= Node,
     SrcUUID = couch_util:get_value(<<"source_uuid">>, Entry),
-    case SameTgt andalso SameNode andalso is_prefix(SrcUUIDPrefix, SrcUUID) of
+    IsPrefix = is_prefix(SrcUUIDPrefix, SrcUUID),
+    Acc1 = case SameTgt andalso SameNode andalso IsPrefix of
         true ->
-            couch_util:get_value(<<"target_seq">>, Entry);
+            EntrySourceSeq = couch_util:get_value(<<"source_seq">>, Entry),
+            EntryTargetSeq = couch_util:get_value(<<"target_seq">>, Entry),
+            [{EntrySourceSeq, EntryTargetSeq} | Acc];
         false ->
-            get_target_seq(SrcHistory, TgtUUID, Node, SrcUUIDPrefix)
-    end.
+            Acc
+    end,
+    get_target_seqs(HProps, TgtUUID, Node, SrcUUIDPrefix, Acc1).
 
 
 with_src_db(#acc{source = Source}, Fun) ->
