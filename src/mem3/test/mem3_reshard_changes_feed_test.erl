@@ -164,9 +164,8 @@ continuous_feed_should_work_during_split(#{db1 := Db}) ->
                         spawn_monitor(fun() -> split_and_wait(Db) end),
                         U({"in_process", I});
                     stop ->
-                        ok;
-                    {'DOWN', _, process, _, normal} ->
-                        U({"after", I})
+                        receive {'DOWN', _, process, _, _} -> ok end,
+                        ok
                 end
             end,
             Updater({"before", 1})
@@ -190,9 +189,7 @@ continuous_feed_should_work_during_split(#{db1 := Db}) ->
                         UpdaterPid ! add,
                         {ok, Acc};
                     {"in_process", _} ->
-                        {ok, Acc};
-                    {"after", _} ->
-                        {stop, Acc}
+                        {ok, Acc}
                 end;
             (timeout, Acc) ->
                 {ok, Acc};
