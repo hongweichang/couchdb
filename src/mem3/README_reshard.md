@@ -32,7 +32,7 @@ Some interesting fields from the `#job{}` record:
  - `job_state` The running state of the job. Indicates if the job is `running`, `stopped`, `completed` or `failed`.
  - `split_state` Once the job is running this indicates how far along it got in the splitting process.
  - `source` Source shard file. If/when merge is implemented this will be a list.
- - `target` List of target shard files. This is expected to be a list of 2 times currently.
+ - `target` List of target shard files. This is expected to be a list of 2 items currently.
  - `history` A time-line of state transitions represented as a list of tuples.
  - `pid` When job is running this will be set to the pid of the process.
 
