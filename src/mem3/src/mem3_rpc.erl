@@ -50,6 +50,11 @@
 -include("mem3.hrl").
 -include_lib("couch/include/couch_db.hrl").
 
+
+-define(BATCH_SIZE, 1000).
+-define(REXI_CALL_TIMEOUT_MSEC, 600000).
+
+
 % "Pull" is a bit of a misnomer here, as what we're actually doing is
 % issuing an RPC request and telling the remote node to push updates to
 % us. This lets us reuse all of the battle-tested machinery of mem3_rpc.
@@ -232,7 +237,7 @@ save_purge_checkpoint_rpc(DbName, PurgeDocId, Body) ->
 
 replicate_rpc(DbName, Target) ->
     rexi:reply(try
-        Opts = [{batch_size, 1000}, {batch_count, all}],
+        Opts = [{batch_size, ?BATCH_SIZE}, {batch_count, all}],
         {ok, mem3_rep:go(DbName, Target, Opts)}
     catch
         Tag:Error ->
@@ -370,7 +375,7 @@ find_bucket(NewSeq, CurSeq, Bucket) ->
 
 
 rexi_call(Node, MFA) ->
-    rexi_call(Node, MFA, 600000).
+    rexi_call(Node, MFA, ?REXI_CALL_TIMEOUT_MSEC).
 
 
 rexi_call(Node, MFA, Timeout) ->
