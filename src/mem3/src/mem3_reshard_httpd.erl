@@ -34,7 +34,7 @@
 
 % GET /_reshard
 handle_reshard_req(#httpd{method='GET', path_parts=[_]} = Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     State = mem3_reshard_api:get_summary(),
     send_json(Req, State);
 
@@ -44,14 +44,14 @@ handle_reshard_req(#httpd{path_parts=[_]} = Req) ->
 % GET /_reshard/state
 handle_reshard_req(#httpd{method='GET',
         path_parts=[_, ?STATE]} = Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     {State, Reason} = mem3_reshard_api:get_shard_splitting_state(),
     send_json(Req, {[{state, State}, {reason, Reason}]});
 
 % PUT /_reshard/state
 handle_reshard_req(#httpd{method='PUT',
         path_parts=[_, ?STATE]} = Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     couch_httpd:validate_ctype(Req, "application/json"),
     {Props} = couch_httpd:json_body_obj(Req),
     State = couch_util:get_value(<<"state">>, Props),
@@ -89,7 +89,7 @@ handle_reshard_req(#httpd{path_parts=[_, ?STATE | _]} = _Req) ->
 
 % GET /_reshard/jobs
 handle_reshard_req(#httpd{method='GET', path_parts=[_, ?JOBS]}=Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     Jobs = mem3_reshard_api:get_jobs(),
     Total = length(Jobs),
     send_json(Req, {[{total_rows, Total}, {offset, 0}, {jobs, Jobs}]});
@@ -97,7 +97,7 @@ handle_reshard_req(#httpd{method='GET', path_parts=[_, ?JOBS]}=Req) ->
 % POST /_reshard/jobs {"node": "...", "shard": "..."}
 handle_reshard_req(#httpd{method = 'POST',
         path_parts=[_, ?JOBS]} = Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     couch_httpd:validate_ctype(Req, "application/json"),
     {Props} = couch_httpd:json_body_obj(Req),
     Node = validate_node(couch_util:get_value(<<"node">>, Props)),
@@ -133,7 +133,7 @@ handle_reshard_req(#httpd{path_parts=[_, _]}) ->
 % GET /_reshard/jobs/$jobid
 handle_reshard_req(#httpd{method='GET',
         path_parts=[_, ?JOBS, JobId]}=Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     case mem3_reshard_api:get_job(JobId) of
         {ok, JobInfo} ->
             send_json(Req, JobInfo);
@@ -144,7 +144,7 @@ handle_reshard_req(#httpd{method='GET',
 % DELETE /_reshard/jobs/$jobid
 handle_reshard_req(#httpd{method='DELETE',
         path_parts=[_, ?JOBS, JobId]}=Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     case mem3_reshard_api:get_job(JobId) of
         {ok, {Props}} ->
             NodeBin = couch_util:get_value(node, Props),
@@ -165,7 +165,7 @@ handle_reshard_req(#httpd{path_parts=[_, ?JOBS, _]} = Req) ->
 % GET /_reshard/jobs/$jobid/state
 handle_reshard_req(#httpd{method='GET',
         path_parts=[_, ?JOBS, JobId, ?STATE]} = Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     case mem3_reshard_api:get_job(JobId) of
         {ok, {Props}} ->
             JobState = couch_util:get_value(job_state, Props),
@@ -182,7 +182,7 @@ handle_reshard_req(#httpd{method='GET',
 % PUT /_reshard/jobs/$jobid/state
 handle_reshard_req(#httpd{method='PUT',
         path_parts=[_, ?JOBS, JobId, ?STATE]} = Req) ->
-    check_if_disabled(),
+    reject_if_disabled(),
     couch_httpd:validate_ctype(Req, "application/json"),
     {Props} = couch_httpd:json_body_obj(Req),
     State = couch_util:get_value(<<"state">>, Props),
@@ -220,7 +220,7 @@ handle_reshard_req(#httpd{path_parts=[_, ?JOBS, _, ?STATE]} = Req) ->
     send_method_not_allowed(Req, "GET,HEAD,PUT").
 
 
-check_if_disabled() ->
+reject_if_disabled() ->
     case mem3_reshard:is_disabled() of
         true -> throw(not_implemented);
         false -> ok
@@ -296,18 +296,22 @@ validate_range(<<BBin:8/binary, "-", EBin:8/binary>>) ->
         }
     catch
         _:_ ->
-            throw({bad_request, <<"Invalid `range`">>})
+            invalid_range()
     end,
     if
-        B < 0 -> throw({bad_request, <<"Invalid `range`">>});
-        E < 0 -> throw({bad_request, <<"Invalid `range`">>});
-        B > (2 bsl 31) - 1 -> throw({bad_request, <<"Invalid `range`">>});
-        E > (2 bsl 31) - 1 -> throw({bad_request, <<"invalid `range`">>});
-        B >= E -> throw({bad_request, <<"Invalid `range`">>});
+        B < 0 -> invalid_range();
+        E < 0 -> invalid_range();
+        B > (2 bsl 31) - 1 -> invalid_range();
+        E > (2 bsl 31) - 1 -> invalid_range();
+        B >= E -> invalid_range();
         true -> ok
     end,
     % Use a list format here to make it look the same as #shard's range
     [B, E];
 
 validate_range(_Range) ->
+    invalid_range().
+
+
+invalid_range() ->
     throw({bad_request, <<"Invalid `range`">>}).
