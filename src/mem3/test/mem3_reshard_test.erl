@@ -251,7 +251,7 @@ split_partitioned_db(#{db2 := Db}) ->
     end).
 
 
-% Make sure a shard can be split again after it was split one. This checks that
+% Make sure a shard can be split again after it was split once. This checks that
 % too many got added to some range, such that on next split they'd fail to fit
 % in to any of the new target ranges.
 split_twice(#{db1 := Db}) ->

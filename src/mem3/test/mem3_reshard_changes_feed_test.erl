@@ -102,8 +102,6 @@ normal_feed_should_work_after_split(#{db1 := Db}) ->
         % confirm we didn't lost any changes and have consistent last seq
         {ok, Changes3, EndSeq3} = get_changes_feed(Db, BaseArgs),
         ?assertChanges(OldChanges, Changes3),
-        %% FIXME. last_seq should be consistent
-        % ?assertEqual(EndSeq3, EndSeq2),
 
         % add some docs
         add_test_docs(Db, #{docs => [11, 15]}),
@@ -140,8 +138,6 @@ normal_feed_should_work_after_split(#{db1 := Db}) ->
 
         Args7 = Args6#changes_args{dir = rev, limit = 4},
         {ok, Changes7, EndSeq7} = get_changes_feed(Db, Args7),
-        %% FIXME - I believe rev is just conceptually broken in Couch 2.x
-        % ?assertChanges(lists:reverse(Changes6), Changes7),
         ?assertEqual(4, length(Changes7)),
         [#{seq := Seq7} | _] = Changes7,
         ?assertEqual(EndSeq7, Seq7)

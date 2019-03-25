@@ -54,7 +54,7 @@ teardown({Url, {Db1, Db2, Db3}}) ->
 
 
 start_couch() ->
-    test_util:start_couch(?CONFIG_CHAIN, [mem3, chttpd]).
+    test_util:start_couch([mem3, chttpd]).
 
 
 stop_couch(Ctx) ->
@@ -384,11 +384,13 @@ individual_job_stop_when_cluster_stopped({Top, {Db1, _, _}}) ->
         % The job should stay stopped
         ?assertMatch({200, #{<<"state">> := <<"stopped">>}}, req(get, StUrl)),
 
-        % The it should be possible to resume the job and it should complete
+        % It should be possible to resume job and it should complete
         ?assertMatch({200, _}, req(put, StUrl, #{state => running})),
+
         % Wait for the the job to start running and intercept in topoff1 state
         receive {JobPid2, topoff1} -> ok end,
         ?assertMatch({200, #{<<"state">> := <<"running">>}}, req(get, StUrl)),
+
         % Let it continue running and it should complete eventually
         JobPid2 ! continue,
         wait_state(StUrl, <<"completed">>)
@@ -590,10 +592,10 @@ recover_in_topoff1({Top, {Db1, _, _}}) ->
 
 
 recover_in_initial_copy({Top, {Db1, _, _}}) ->
-    {timeout, 60, ?_test(begin
+    ?_test(begin
         JobId = recover_in_state(Top, Db1, initial_copy),
         wait_state(Top ++ ?JOBS ++ ?b2l(JobId) ++ "/state", <<"completed">>)
-    end)}.
+    end).
 
 
 recover_in_copy_local_docs({Top, {Db1, _, _}}) ->
@@ -650,7 +652,7 @@ check_max_jobs({Top, {Db1, Db2, _}}) ->
         {201, R2} = req(post, Jobs, #{type => split, db => Db1}),
         wait_to_complete(Top, R2),
 
-        % Stop clustering so jobs are not started anymore and ensure max jobs is
+        % Stop clustering so jobs are not started anymore and ensure max jobs
         % is enforced even if jobs are stopped
         ?assertMatch({200, _}, req(put, Top ++ ?STATE, #{state => stopped})),
 
@@ -749,6 +751,7 @@ delete_source_in_state(Top, Db, State) when is_atom(State), is_binary(Db) ->
     intercept_state(State),
     Body = #{type => split, db => Db},
     {201, [#{?ID := Id}]} = req(post, Top ++ ?JOBS, Body),
+    ?debugFmt(".... waiting for state ~p ~p~n", [Id, State]),
     receive {JobPid, State} -> ok end,
     sync_delete_db(Top, Db),
     JobPid ! continue,

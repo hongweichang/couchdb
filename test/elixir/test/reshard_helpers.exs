@@ -80,7 +80,7 @@ defmodule ReshardHelpers do
     Enum.map(fn job -> job["id"] end, jobs)
   end
 
-  def get_node1 do
+  def get_first_node do
     mresp = Couch.get("/_membership")
     assert mresp.status_code == 200
     cluster_nodes = mresp.body["cluster_nodes"]

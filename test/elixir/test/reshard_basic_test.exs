@@ -35,7 +35,7 @@ defmodule ReshardBasicTest do
 
   test "check validation of invalid parameters", context do
     db1 = context[:db1]
-    node1 = get_node1()
+    node1 = get_first_node()
 
     resp = post_job_node(db1, "badnode")
     assert resp.status_code == 400
@@ -66,7 +66,7 @@ defmodule ReshardBasicTest do
 
   test "split q=1 db shards on node1 (1 job)", context do
     db = context[:db1]
-    node1 = get_node1()
+    node1 = get_first_node()
 
     resp = post_job_node(db, node1)
     assert resp.status_code == 201
@@ -129,7 +129,7 @@ defmodule ReshardBasicTest do
 
   test "split q=2 shards on node1 (2 jobs)", context do
     db = context[:db2]
-    node1 = get_node1()
+    node1 = get_first_node()
 
     resp = post_job_node(db, node1)
     assert resp.status_code == 201

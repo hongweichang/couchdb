@@ -20,7 +20,7 @@ defmodule ReshardAllDocsTest do
 
   test "all_docs after splitting all shards on node1", context do
     db = context[:db]
-    node1 = get_node1()
+    node1 = get_first_node()
     docs = add_docs(1..100, db)
 
     before_split_all_docs = all_docs(db)
