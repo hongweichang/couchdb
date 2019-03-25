@@ -36,8 +36,8 @@
 update_shard_map(#job{source = Source, target = Target} = Job) ->
     Node = hd(mem3_util:live_nodes()),
     JobStr = mem3_reshard_job:jobfmt(Job),
-    LogMsg1 = "~p : calling update_shard_map on node ~p. ~p",
-    couch_log:notice(LogMsg1, [?MODULE, Node, JobStr]),
+    LogMsg1 = "~p : ~p calling update_shard_map node:~p",
+    couch_log:notice(LogMsg1, [?MODULE, JobStr, Node]),
     ServerRef = {?MODULE, Node},
     CallArg = {update_shard_map, Source, Target},
     TimeoutMSec = shard_update_timeout_msec(),
@@ -50,8 +50,8 @@ update_shard_map(#job{source = Source, target = Target} = Job) ->
         _:Err ->
             exit(Err)
     end,
-    LogMsg2 = "~p : update_shard_map on node returned. ~p",
-    couch_log:notice(LogMsg2, [?MODULE, Node]),
+    LogMsg2 = "~p : ~p update_shard_map on node:~p returned",
+    couch_log:notice(LogMsg2, [?MODULE, JobStr, Node]),
     UntilSec = mem3_reshard:now_sec() + (TimeoutMSec div 1000),
     case wait_source_removed(Source, 5, UntilSec) of
         true -> ok;
@@ -106,8 +106,7 @@ code_change(_OldVsn, State, _Extra) ->
 update_shard_map(Source, Target) ->
     ok = validate_coordinator(),
     ok = replicate_from_all_nodes(shard_update_timeout_msec()),
-    #shard{name = SourceName} = Source,
-    DocId = mem3:dbname(SourceName),
+    DocId = mem3:dbname(Source#shard.name),
     OldDoc = case mem3_util:open_db_doc(DocId) of
         {ok, #doc{deleted = true}} ->
             throw({error, missing_source});

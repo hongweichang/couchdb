@@ -51,6 +51,9 @@
 -include("mem3_reshard.hrl").
 
 
+% Batch size for internal replication topoffs
+-define(INTERNAL_REP_BATCH_SIZE, 2000).
+
 % The list of possible job states. The order of this
 % list is important as a job will progress linearly
 % through it. However, when starting a job we may
@@ -105,7 +108,7 @@ start_link(#job{} = Job) ->
 
 
 % This is called by the main proces after it has checkpointed the progress
-% of the job. After the new state was checkpointed, we signal the job do start
+% of the job. After the new state is checkpointed, we signal the job to start
 % executing that state.
 checkpoint_done(#job{pid = Pid} = Job) ->
     couch_log:notice(" ~p : checkpoint done for ~p", [?MODULE, jobfmt(Job)]),
@@ -215,7 +218,7 @@ switch_to_next_state(#job{} = Job0) ->
 
 
 checkpoint(Job) ->
-    % Ask main process to checkpoint. When if it has finished it will notify us
+    % Ask main process to checkpoint. When it has finished it will notify us
     % by calling by checkpoint_done/1. The reason not to call the main process
     % via a gen_server:call is because the main process could be in the middle
     % of terminating the job and then it would deadlock (after sending us a
@@ -411,7 +414,7 @@ topoff_impl(#job{source = #shard{} = Source, target = Targets}) ->
     check_source_exists(Source, topoff),
     check_targets_exist(Targets, topoff),
     TMap = maps:from_list([{R, T} || #shard{range = R} = T <- Targets]),
-    Opts =  [{batch_size, 2000}, {batch_count, all}],
+    Opts =  [{batch_size, ?INTERNAL_REP_BATCH_SIZE}, {batch_count, all}],
     case mem3_rep:go(Source, TMap, Opts) of
         {ok, Count} ->
             Args = [?MODULE, shardsstr(Source, Targets), Count],

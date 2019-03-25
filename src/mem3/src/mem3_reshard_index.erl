@@ -76,9 +76,9 @@ fabric_design_docs(DbName) ->
 
 
 indices(DbName, Doc) ->
-    mrview_indices(DbName, Doc) ++
-            [dreyfus_indices(DbName, Doc) || has_app(dreyfus)] ++
-            [hastings_indices(DbName, Doc) || has_app(hastings)].
+    mrview_indices(DbName, Doc)
+    ++ [dreyfus_indices(DbName, Doc) || has_app(dreyfus)]
+    ++ [hastings_indices(DbName, Doc) || has_app(hastings)].
 
 
 mrview_indices(DbName, Doc) ->
